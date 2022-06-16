@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
+import org.learning.sprinbootapitrest.persons.dto.PersonName;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -188,11 +189,75 @@ class PersonControllerTest {
     }
 
     @Test
-    void updatePerson() {
+    void itShouldUpdateAPersonData() throws Exception {
+        PersonDTO newPersonDto = new PersonDTO("Lauriano", 20);
+        PersonDTO updatePersonDto = new PersonDTO("Lauriko", 21);
+
+        String body = objectMapper.writeValueAsString(updatePersonDto);
+
+        personRepository.save(newPersonDto);
+        assertThat(personRepository.getAll()).hasSize(5);
+
+        MvcResult mvcResult = mvc
+                .perform(put("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String personFromListUpdated = objectMapper.writeValueAsString(personRepository.findById(5));
+        String response = mvcResult.getResponse().getContentAsString();
+
+        assertThat(response).isEqualTo(body);
+        assertThat(response).isEqualTo(personFromListUpdated);
     }
 
     @Test
-    void patchPerson() {
+    void itShouldNotUpdateAPersonDataWhenPersonDoesNotExistInThePersonsList() throws Exception {
+        PersonDTO updatePersonDto = new PersonDTO("Lauriko", 21);
+        String body = objectMapper.writeValueAsString(updatePersonDto);
+
+        MvcResult mvcResult = mvc
+                .perform(put("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String response = mvcResult.getResponse().getContentAsString();
+
+        assertThat(response).isEmpty();
+        assertThat(personRepository.findById(5)).isNull();
+    }
+
+
+    @Test
+    void itShouldUpdatePersonsNameFeature() throws Exception {
+        PersonName newPersonsName = new PersonName("Mauricio");
+        PersonDTO dummyPerson = new PersonDTO("Mauri", 21);
+        String body = objectMapper.writeValueAsString(newPersonsName);
+
+        personRepository.save(dummyPerson);
+        assertThat(personRepository.getAll()).hasSize(5);
+
+        MvcResult mvcResult = mvc
+                .perform(patch("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String personWithNameUpdatedFromList = objectMapper.writeValueAsString(personRepository.findById(5));
+        String response = mvcResult.getResponse().getContentAsString();
+
+        assertThat(response).isEqualTo("{\"name\":\"Mauricio\"}");
+        assertThat(personWithNameUpdatedFromList).isEqualTo("{\"name\":\"Mauricio\",\"age\":21}");
     }
 
     private List<Person> loadPersons() {

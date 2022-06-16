@@ -154,7 +154,7 @@ class PersonRepositoryTest {
     }
 
     @Test
-    void deleteById() {
+    void itShouldDeleteAPersonByItsId() {
         final int existingPersonId = 1;
         //when:
         assertNotNull(this.personRepository);
@@ -162,6 +162,19 @@ class PersonRepositoryTest {
         //then:
         assertThat(personDeleted).isNotNull();
         assertThat(personDeleted).isNotIn(this.personRepository.getAll());
+    }
+
+    @Test
+    void itShouldNotDeleteAPersonByNonMatchingId() {
+        final int existingPersonId = 11;
+        final int initPersonListSize = 4;
+        //when:
+        assertNotNull(this.personRepository);
+        assertThat(this.personRepository.getAll()).hasSize(initPersonListSize);
+        Person personDeleted = personRepository.deleteById(existingPersonId);
+        //then:
+        assertThat(personDeleted).isNull();
+        assertThat(this.personRepository.getAll()).hasSize(initPersonListSize);
     }
 
     @Test
