@@ -212,6 +212,8 @@ class PersonControllerTest {
 
         assertThat(response).isEqualTo(body);
         assertThat(response).isEqualTo(personFromListUpdated);
+        assertThat(personRepository.deleteById(5))
+                .isEqualTo(new Person(5, updatePersonDto.getName(), updatePersonDto.getAge()));
     }
 
     @Test
@@ -258,6 +260,8 @@ class PersonControllerTest {
 
         assertThat(response).isEqualTo("{\"name\":\"Mauricio\"}");
         assertThat(personWithNameUpdatedFromList).isEqualTo("{\"name\":\"Mauricio\",\"age\":21}");
+        assertThat(personRepository.deleteById(5))
+                .isEqualTo(new Person(5, newPersonsName.getName(), dummyPerson.getAge()));
     }
 
     private List<Person> loadPersons() {
