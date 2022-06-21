@@ -6,9 +6,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
 import org.learning.sprinbootapitrest.persons.dto.PersonName;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,25 +24,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-//@WebMvcTest(PersonController.class) -> This'll avoid to load all context (only web layer)
-@AutoConfigureMockMvc // without the cost of starting the server
+@WebMvcTest(PersonController.class)
 class PersonControllerTest {
 
     @Autowired
     private MockMvc mvc;
 
-    @Autowired
-    private PersonRepository personRepository;
+    @MockBean
+    private PersonRepository mockPersonRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
 
+    PersonControllerTest() {
+    }
+
     @BeforeEach
-    public void itShouldHaveAListOfFourPersonsFromRepositoryAtStarting() {
-        assertThat(personRepository).isNotNull();
-        assertThat(personRepository.getAll()).hasSize(4);
-        assertThat(personRepository.getAll()).isEqualTo(loadPersons());
+    public void setUp() {
+        Mockito.when(mockPersonRepository.getAll()).thenReturn(loadPersons());
     }
 
     @Test
@@ -54,12 +54,29 @@ class PersonControllerTest {
 
 
         String response = mvcResult.getResponse().getContentAsString();
-        String expectedResponse = objectMapper.writeValueAsString(personRepository.getAll());
+        String expectedResponse = objectMapper.writeValueAsString(mockPersonRepository.getAll());
         assertThat(response).contains(expectedResponse);
     }
 
     @Test
+    void itShouldGetNoContentWhenNoPersonIsInTheList() throws Exception {
+        Mockito.when(mockPersonRepository.getAll()).thenReturn(Collections.emptyList());
+
+        MvcResult mvcResult = mvc.perform(get("/persons")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        String response = mvcResult.getResponse().getContentAsString();
+        assertThat(response).isEmpty();
+    }
+
+    @Test
     void itShouldGetAListOfPersonsByMatchingName() throws Exception {
+        List<PersonDTO> personDTOList = List.of(new PersonDTO("Laura", 40));
+        Mockito.when(mockPersonRepository.findByName("laura")).thenReturn(personDTOList);
+
         MvcResult mvcResult = mvc.perform(get("/persons/name/laura")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
@@ -67,24 +84,24 @@ class PersonControllerTest {
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        String expectedResponse = objectMapper.writeValueAsString(personRepository.findByName("laura"));
-        assertThat(response).contains(expectedResponse);
+        String expectedResponse = objectMapper.writeValueAsString(personDTOList);
+
+        assertThat(response).isEqualTo(expectedResponse);
     }
 
     @Test
     void itShouldNotGetAListOfPersonsByANonMatchingName() throws Exception {
+        Mockito.when(mockPersonRepository.findByName("marianos")).thenReturn(Collections.emptyList());
+
         MvcResult mvcResult = mvc.perform(get("/persons/name/marianos")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
-                .andExpect(status().isOk())
+                .andExpect(status().isNoContent())
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        String expectedResponse = objectMapper.writeValueAsString(personRepository.findByName("marianos"));
 
-        assertThat(response).isEqualTo(expectedResponse);
-        assertThat(response).isEqualTo("[]");
-
+        assertThat(response).isEmpty();
     }
 
     @Test
@@ -92,7 +109,9 @@ class PersonControllerTest {
         PersonDTO person = new PersonDTO("Laura", 30);
         final String expectedResponseContent = objectMapper.writeValueAsString(person);
 
-        MvcResult mvcResult = mvc.perform(get("/persons/1")
+        Mockito.when(mockPersonRepository.findById(1)).thenReturn(person);
+
+        MvcResult mvcResult = mvc.perform(get("/persons/{id}", 1)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isOk())
@@ -100,35 +119,75 @@ class PersonControllerTest {
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        String expectedResponse = objectMapper.writeValueAsString(personRepository.findById(1));
-        assertThat(response).isEqualToIgnoringWhitespace(expectedResponse);
+        String expectedResponse = objectMapper.writeValueAsString(mockPersonRepository.findById(1));
+        assertThat(response).isEqualTo(expectedResponse);
+    }
+
+
+    @Test
+    void itShouldNotFindAPersonByNonMatchingId() throws Exception {
+        MvcResult mvcResult = mvc.perform(get("/persons/100")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""))
+                .andReturn();
+
+        String response = mvcResult.getResponse().getContentAsString();
+        assertThat(response).isEmpty();
     }
 
     @Test
     void itShouldSaveAPersonToRepositoryList() throws Exception {
-        PersonDTO newPersonDto = new PersonDTO("Lucia", 222);
-        Person newPerson = new Person(5, newPersonDto.getName(), newPersonDto.getAge());
+        Person person = new Person(5, "Lucia", 222);
+        PersonDTO newPersonDto = new PersonDTO(person.getName(), person.getAge());
+        List<Person> personList = loadPersons();
         String body = objectMapper.writeValueAsString(newPersonDto);
+
+        Mockito.when(mockPersonRepository.save(newPersonDto)).thenReturn(newPersonDto);
+        Mockito.when(mockPersonRepository.findById(5)).thenReturn(newPersonDto);
+        personList.add(person);        // After adding one person
+        Mockito.when(mockPersonRepository.getAll()).thenReturn(personList);
 
         MvcResult mvcResult = mvc
                 .perform(post("/persons")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andDo(print())
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(content().json(body))
                 .andReturn();
 
+        MvcResult mvcResultFindById = mvc
+                .perform(get("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+
+        MvcResult mvcResultAll = mvc
+                .perform(get("/persons")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
         String response = mvcResult.getResponse().getContentAsString();
-        List<Person> personsList = personRepository.getAll();
+        String responseFindById = mvcResultFindById.getResponse().getContentAsString();
+        String personSaved = objectMapper.writeValueAsString(person);
+        String allPersonsAfterSaveOne = mvcResultAll.getResponse().getContentAsString();
+
         assertThat(response).isEqualTo(body);
-        assertThat(personsList).contains(newPerson);
-        assertThat(personsList).hasSize(5);
+        assertThat(response).contains(responseFindById);
+        assertThat(allPersonsAfterSaveOne).contains(personSaved);
     }
 
     @Test
     void itShouldNotSaveAPersonToRepositoryListWhenAgeIsNegative() throws Exception {
         PersonDTO newPersonDto = new PersonDTO("Lucia", -1);
+        Mockito.when(mockPersonRepository.save(newPersonDto)).thenReturn(null);
+
         String body = objectMapper.writeValueAsString(newPersonDto);
 
         MvcResult mvcResult = mvc
@@ -136,40 +195,30 @@ class PersonControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andDo(print())
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andExpect(content().string(""))
                 .andReturn();
 
-
         String response = mvcResult.getResponse().getContentAsString();
         assertThat(response).isEmpty();
-        assertThat(personRepository.getAll()).hasSize(4);
-
     }
 
     @Test
-    void itShouldDeletedAPersonFromRepositoryListAndEnsureListSize() throws Exception {
-        PersonDTO newPersonDto = new PersonDTO("Sasiolo", 40);
-        Person newPersonToBeDelete = new Person(5, newPersonDto.getName(), newPersonDto.getAge());
-        String body = objectMapper.writeValueAsString(newPersonDto);
+    void itShouldDeletedAPersonFromRepositoryList() throws Exception {
+        Person newPersonToBeDelete = new Person(5, "Sasiolo", 40);
 
-        // Creating a dummy person to be saved and ensure it was saved correctly
-        personRepository.save(newPersonDto);
-        assertThat(personRepository.getAll()).hasSize(5);
+        Mockito.when(mockPersonRepository.deleteById(5)).thenReturn(newPersonToBeDelete);
 
         MvcResult mvcResult = mvc
                 .perform(delete("/persons/{id}", 5)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(content().json(body))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""))
                 .andReturn();
 
-        String expectedResult = objectMapper.writeValueAsString(newPersonToBeDelete);
         String response = mvcResult.getResponse().getContentAsString();
-
-        assertThat(response).isEqualTo(expectedResult);
-        assertThat(personRepository.getAll()).hasSize(4);
+        assertThat(response).isEmpty();
     }
 
     @Test
@@ -178,25 +227,23 @@ class PersonControllerTest {
                 .perform(delete("/persons/{id}", 10)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andExpect(content().string(""))
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
 
         assertThat(response).isEmpty();
-        assertThat(personRepository.getAll()).hasSize(4);
+        assertThat(mockPersonRepository.getAll()).hasSize(4);
     }
 
     @Test
     void itShouldUpdateAPersonData() throws Exception {
-        PersonDTO newPersonDto = new PersonDTO("Lauriano", 20);
         PersonDTO updatePersonDto = new PersonDTO("Lauriko", 21);
-
         String body = objectMapper.writeValueAsString(updatePersonDto);
 
-        personRepository.save(newPersonDto);
-        assertThat(personRepository.getAll()).hasSize(5);
+        Mockito.when(mockPersonRepository.save(updatePersonDto, 5)).thenReturn(updatePersonDto);
+        Mockito.when(mockPersonRepository.findById(5)).thenReturn(updatePersonDto);
 
         MvcResult mvcResult = mvc
                 .perform(put("/persons/{id}", 5)
@@ -204,16 +251,23 @@ class PersonControllerTest {
                         .content(body)
                 )
                 .andDo(print())
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        MvcResult mvcResultFindByIdAfterUpdate = mvc
+                .perform(get("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                )
+                .andDo(print())
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String personFromListUpdated = objectMapper.writeValueAsString(personRepository.findById(5));
         String response = mvcResult.getResponse().getContentAsString();
+        String personUpdated = objectMapper.writeValueAsString(updatePersonDto);
+        String responseFindByIdAfterUpdate = mvcResultFindByIdAfterUpdate.getResponse().getContentAsString();
 
-        assertThat(response).isEqualTo(body);
-        assertThat(response).isEqualTo(personFromListUpdated);
-        assertThat(personRepository.deleteById(5))
-                .isEqualTo(new Person(5, updatePersonDto.getName(), updatePersonDto.getAge()));
+        assertThat(response).isEmpty();
+        assertThat(responseFindByIdAfterUpdate).isEqualTo(personUpdated);
     }
 
     @Test
@@ -221,30 +275,31 @@ class PersonControllerTest {
         PersonDTO updatePersonDto = new PersonDTO("Lauriko", 21);
         String body = objectMapper.writeValueAsString(updatePersonDto);
 
+        Mockito.when(mockPersonRepository.save(updatePersonDto, 5)).thenReturn(null);
+
         MvcResult mvcResult = mvc
                 .perform(put("/persons/{id}", 5)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
                 )
                 .andDo(print())
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
 
         assertThat(response).isEmpty();
-        assertThat(personRepository.findById(5)).isNull();
     }
 
 
     @Test
-    void itShouldUpdatePersonsNameFeature() throws Exception {
+    void itShouldUpdatePersonsName() throws Exception {
         PersonName newPersonsName = new PersonName("Mauricio");
-        PersonDTO dummyPerson = new PersonDTO("Mauri", 21);
+        PersonDTO personDTO = new PersonDTO(newPersonsName.getName(), 10);
         String body = objectMapper.writeValueAsString(newPersonsName);
 
-        personRepository.save(dummyPerson);
-        assertThat(personRepository.getAll()).hasSize(5);
+        Mockito.when(mockPersonRepository.save(newPersonsName, 5)).thenReturn(newPersonsName);
+        Mockito.when(mockPersonRepository.findById(5)).thenReturn(personDTO);
 
         MvcResult mvcResult = mvc
                 .perform(patch("/persons/{id}", 5)
@@ -252,16 +307,43 @@ class PersonControllerTest {
                         .content(body)
                 )
                 .andDo(print())
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        MvcResult mvcResultAfterUpdateName = mvc
+                .perform(get("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                )
+                .andDo(print())
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String personWithNameUpdatedFromList = objectMapper.writeValueAsString(personRepository.findById(5));
+        String personUpdated = objectMapper.writeValueAsString(personDTO);
         String response = mvcResult.getResponse().getContentAsString();
+        String personAfterUpdate = mvcResultAfterUpdateName.getResponse().getContentAsString();
 
-        assertThat(response).isEqualTo("{\"name\":\"Mauricio\"}");
-        assertThat(personWithNameUpdatedFromList).isEqualTo("{\"name\":\"Mauricio\",\"age\":21}");
-        assertThat(personRepository.deleteById(5))
-                .isEqualTo(new Person(5, newPersonsName.getName(), dummyPerson.getAge()));
+        assertThat(response).isEmpty();
+        assertThat(personUpdated).isEqualTo(personAfterUpdate);
+    }
+
+    @Test
+    void itShouldNotUpdatePersonsNameWhenIdIsNoMatchingPerson() throws Exception {
+        PersonName newPersonsName = new PersonName("Mauricio");
+        String body = objectMapper.writeValueAsString(newPersonsName);
+
+        Mockito.when(mockPersonRepository.save(newPersonsName, 5)).thenReturn(null);
+
+        MvcResult mvcResult = mvc
+                .perform(patch("/persons/{id}", 5)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        String response = mvcResult.getResponse().getContentAsString();
+        assertThat(response).isEmpty();
     }
 
     private List<Person> loadPersons() {
