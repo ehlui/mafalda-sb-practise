@@ -2,10 +2,12 @@ package org.learning.sprinbootapitrest.persons;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.hamcrest.core.Is;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
 import org.learning.sprinbootapitrest.persons.dto.PersonName;
+import org.learning.sprinbootapitrest.persons.errors.PersonNotFoundException;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -14,11 +16,16 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,15 +133,22 @@ class PersonControllerTest {
 
     @Test
     void itShouldNotFindAPersonByNonMatchingId() throws Exception {
-        MvcResult mvcResult = mvc.perform(get("/persons/100")
+        final int nonMatchingId = 100;
+        String exceptionMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(nonMatchingId);
+
+        Mockito.when(mockPersonRepository.findById(nonMatchingId))
+                .thenThrow(new PersonNotFoundException(nonMatchingId));
+
+        MvcResult mvcResult = mvc.perform(get("/persons/{id}", 100)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
-                .andExpect(status().isNoContent())
-                .andExpect(content().string(""))
+                .andExpect(status().isNotFound())
+                .andExpect(result -> assertTrue(result.getResolvedException() instanceof PersonNotFoundException))
+                .andExpect(result -> assertEquals(exceptionMessage, result.getResolvedException().getMessage()))
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        assertThat(response).isEmpty();
+        assertThat(response).isNotEmpty();
     }
 
     @Test
@@ -186,8 +200,6 @@ class PersonControllerTest {
     @Test
     void itShouldNotSaveAPersonToRepositoryListWhenAgeIsNegative() throws Exception {
         PersonDTO newPersonDto = new PersonDTO("Lucia", -1);
-        Mockito.when(mockPersonRepository.save(newPersonDto)).thenReturn(null);
-
         String body = objectMapper.writeValueAsString(newPersonDto);
 
         MvcResult mvcResult = mvc
@@ -196,26 +208,25 @@ class PersonControllerTest {
                         .content(body))
                 .andDo(print())
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string(""))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status", Is.is("BAD_REQUEST")))
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        assertThat(response).isEmpty();
+        assertThat(response).isNotEmpty();
     }
 
     @Test
     void itShouldDeletedAPersonFromRepositoryList() throws Exception {
-        Person newPersonToBeDelete = new Person(5, "Sasiolo", 40);
-
-        Mockito.when(mockPersonRepository.deleteById(5)).thenReturn(newPersonToBeDelete);
-
         MvcResult mvcResult = mvc
-                .perform(delete("/persons/{id}", 5)
+                .perform(delete("/persons/{id}", 1)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""))
                 .andReturn();
+
+        Mockito.verify(mockPersonRepository, times(1))
+                .deleteById(1);
 
         String response = mvcResult.getResponse().getContentAsString();
         assertThat(response).isEmpty();
@@ -223,18 +234,23 @@ class PersonControllerTest {
 
     @Test
     void itShouldNotDeleteAPersonWithANonMatchingId() throws Exception {
+        final int nonMatchingId = 10;
+        String exceptionMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(nonMatchingId);
+
+        Mockito.doThrow(new PersonNotFoundException(nonMatchingId))
+                .when(mockPersonRepository)
+                .deleteById(nonMatchingId);
+
         MvcResult mvcResult = mvc
-                .perform(delete("/persons/{id}", 10)
-                        .contentType(MediaType.APPLICATION_JSON))
+                .perform(delete("/persons/{id}", nonMatchingId))
                 .andDo(print())
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string(""))
+                .andExpect(status().isNotFound())
+                .andExpect(result -> assertTrue(result.getResolvedException() instanceof PersonNotFoundException))
+                .andExpect(result -> assertEquals(exceptionMessage, result.getResolvedException().getMessage()))
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-
-        assertThat(response).isEmpty();
-        assertThat(mockPersonRepository.getAll()).hasSize(4);
+        assertThat(response).isNotEmpty();
     }
 
     @Test
@@ -272,23 +288,28 @@ class PersonControllerTest {
 
     @Test
     void itShouldNotUpdateAPersonDataWhenPersonDoesNotExistInThePersonsList() throws Exception {
+        final int nonMatchingId = 5;
+        String exceptionMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(nonMatchingId);
         PersonDTO updatePersonDto = new PersonDTO("Lauriko", 21);
         String body = objectMapper.writeValueAsString(updatePersonDto);
 
-        Mockito.when(mockPersonRepository.save(updatePersonDto, 5)).thenReturn(null);
+        Mockito.when(mockPersonRepository.save(updatePersonDto, nonMatchingId))
+                .thenThrow(new PersonNotFoundException(nonMatchingId));
 
         MvcResult mvcResult = mvc
-                .perform(put("/persons/{id}", 5)
+                .perform(put("/persons/{id}", nonMatchingId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
                 )
                 .andDo(print())
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isNotFound())
+                .andExpect(result -> assertTrue(result.getResolvedException() instanceof PersonNotFoundException))
+                .andExpect(result -> assertEquals(exceptionMessage, result.getResolvedException().getMessage()))
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
 
-        assertThat(response).isEmpty();
+        assertThat(response).isNotEmpty();
     }
 
 
@@ -328,22 +349,28 @@ class PersonControllerTest {
 
     @Test
     void itShouldNotUpdatePersonsNameWhenIdIsNoMatchingPerson() throws Exception {
+        final int nonMatchingId = 5;
+        String exceptionMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(nonMatchingId);
         PersonName newPersonsName = new PersonName("Mauricio");
         String body = objectMapper.writeValueAsString(newPersonsName);
 
-        Mockito.when(mockPersonRepository.save(newPersonsName, 5)).thenReturn(null);
+        Mockito.when(mockPersonRepository.save(newPersonsName, nonMatchingId))
+                .thenThrow(new PersonNotFoundException(nonMatchingId));
 
         MvcResult mvcResult = mvc
-                .perform(patch("/persons/{id}", 5)
+                .perform(patch("/persons/{id}", nonMatchingId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
                 )
                 .andDo(print())
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isNotFound())
+                .andExpect(result -> assertTrue(result.getResolvedException() instanceof PersonNotFoundException))
+                .andExpect(result -> assertEquals(exceptionMessage, result.getResolvedException().getMessage()))
+
                 .andReturn();
 
         String response = mvcResult.getResponse().getContentAsString();
-        assertThat(response).isEmpty();
+        assertThat(response).isNotEmpty();
     }
 
     private List<Person> loadPersons() {
