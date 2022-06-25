@@ -20,4 +20,6 @@ This project has for now a rest service for serving all 4 basic rest verbs (GET,
 - Repository with a in-memory list of persons
 - Controller with all the basic verbs and resources
 - Person model and DTOs
+- Custom Exception Handling
+- All needed tests (Unit and Integration mocking for our custom service)
 
