@@ -22,13 +22,6 @@ public class PersonExceptionHandlers {
                 .body(new ErrorApi(HttpStatus.NOT_FOUND, exception.getMessage()));
     }
 
-    @ExceptionHandler(JsonMappingException.class)
-    public ResponseEntity<ErrorApi> HandlerJsonMappingException(JsonMappingException exception) {
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorApi(HttpStatus.BAD_REQUEST, exception.getMessage()));
-    }
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorApi> HandleValidationExceptions(MethodArgumentNotValidException exception) {
         return ResponseEntity

@@ -3,6 +3,7 @@ package org.learning.sprinbootapitrest.persons;
 import lombok.NonNull;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
 import org.learning.sprinbootapitrest.persons.dto.PersonName;
+import org.learning.sprinbootapitrest.persons.errors.PersonNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
@@ -22,15 +23,12 @@ public class PersonRepository {
     }
 
     public PersonDTO save(@NonNull PersonDTO personDTO) {
-        if (personDTO.getAge() < 0)
-            return null;
-
         Person person = new Person(generateConsecutiveId(), personDTO.getName(), personDTO.getAge());
         this.personList.add(person);
         return personDTO;
     }
 
-    public PersonDTO save(@NonNull PersonDTO person, int id) {
+    public PersonDTO save(@NonNull PersonDTO person, int id) throws PersonNotFoundException {
         return findOptionalById(id)
                 .map(p ->
                 {
@@ -38,10 +36,10 @@ public class PersonRepository {
                     p.setName(person.getName());
                     return new PersonDTO(person.getName(), person.getAge());
                 })
-                .orElse(null);
+                .orElseThrow(() -> new PersonNotFoundException(id));
     }
 
-    public PersonName save(@NonNull PersonName personName, int id) {
+    public PersonName save(@NonNull PersonName personName, int id) throws PersonNotFoundException {
         return personList.stream()
                 .filter(p -> p.getId() == id)
                 .findFirst()
@@ -50,17 +48,17 @@ public class PersonRepository {
                     p.setName(personName.getName());
                     return personName;
                 })
-                .orElse(null);
+                .orElseThrow(() -> new PersonNotFoundException(id));
     }
 
     public Optional<Person> findOptionalById(int id) {
         return personList.stream().filter(p -> p.getId() == id).findFirst();
     }
 
-    public PersonDTO findById(int id) {
+    public PersonDTO findById(int id) throws PersonNotFoundException {
         return findOptionalById(id)
                 .map(p -> new PersonDTO(p.getName(), p.getAge()))
-                .orElse(null);
+                .orElseThrow(() -> new PersonNotFoundException(id));
     }
 
     public List<PersonDTO> findByName(@NonNull String name) {
@@ -71,13 +69,9 @@ public class PersonRepository {
                 .toList();
     }
 
-    public Person deleteById(int id) {
-        Person person = findOptionalById(id).orElse(null);
-        if (person == null)
-            return null;
-
+    public void deleteById(int id) throws PersonNotFoundException {
+        Person person = findOptionalById(id).orElseThrow(() -> new PersonNotFoundException(id));
         this.personList.remove(person);
-        return person;
     }
 
     public List<Person> getAll() {
