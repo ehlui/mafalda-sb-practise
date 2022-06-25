@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
+import org.learning.sprinbootapitrest.persons.errors.PersonNotFoundException;
 
 import java.util.List;
 import java.util.Optional;
@@ -100,7 +101,7 @@ class PersonRepositoryTest {
     @DisplayName("It should not find an optional of person by not matching ID")
     void itShouldNotFindAnOptionalOfPersonByNotMatchingId() {
         //given:
-        final  int existingPersonId = 123;
+        final int existingPersonId = 123;
         //when:
         assertNotNull(this.personRepository);
         Optional<Person> personFound = personRepository.findOptionalById(existingPersonId);
@@ -111,7 +112,7 @@ class PersonRepositoryTest {
     @Test
     @DisplayName("It should find a person by ID")
     void itShouldFindAPersonById() {
-        final  int existingPersonId = 1;
+        final int existingPersonId = 1;
         //when:
         assertNotNull(this.personRepository);
         PersonDTO personFound = personRepository.findById(existingPersonId);
@@ -158,10 +159,14 @@ class PersonRepositoryTest {
         final int existingPersonId = 1;
         //when:
         assertNotNull(this.personRepository);
-        Person personDeleted = personRepository.deleteById(existingPersonId);
+        personRepository.deleteById(existingPersonId);
         //then:
-        assertThat(personDeleted).isNotNull();
-        assertThat(personDeleted).isNotIn(this.personRepository.getAll());
+        Exception exception = assertThrows(
+                PersonNotFoundException.class, () -> personRepository.findById(existingPersonId)
+        );
+        String expectedMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(existingPersonId);
+        String actualMessage = exception.getMessage();
+        assertTrue(actualMessage.contains(expectedMessage));
     }
 
     @Test
@@ -171,10 +176,14 @@ class PersonRepositoryTest {
         //when:
         assertNotNull(this.personRepository);
         assertThat(this.personRepository.getAll()).hasSize(initPersonListSize);
-        Person personDeleted = personRepository.deleteById(existingPersonId);
         //then:
-        assertThat(personDeleted).isNull();
+        Exception exception = assertThrows(
+                PersonNotFoundException.class, () -> personRepository.findById(existingPersonId)
+        );
         assertThat(this.personRepository.getAll()).hasSize(initPersonListSize);
+        String expectedMessage = "Person with id '%d' cannot be found! It may not exists.".formatted(existingPersonId);
+        String actualMessage = exception.getMessage();
+        assertTrue(actualMessage.contains(expectedMessage));
     }
 
     @Test
