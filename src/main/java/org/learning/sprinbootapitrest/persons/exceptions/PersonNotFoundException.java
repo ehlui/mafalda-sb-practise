@@ -1,4 +1,4 @@
-package org.learning.sprinbootapitrest.persons.errors;
+package org.learning.sprinbootapitrest.persons.exceptions;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;

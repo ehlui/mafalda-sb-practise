@@ -3,7 +3,7 @@ package org.learning.sprinbootapitrest.persons;
 import lombok.RequiredArgsConstructor;
 import org.learning.sprinbootapitrest.persons.dto.PersonDTO;
 import org.learning.sprinbootapitrest.persons.dto.PersonName;
-import org.learning.sprinbootapitrest.persons.errors.PersonNotFoundException;
+import org.learning.sprinbootapitrest.persons.exceptions.PersonNotFoundException;
 import org.learning.sprinbootapitrest.persons.handlers.PersonExceptionHandlers;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +39,7 @@ public class PersonController extends PersonExceptionHandlers {
     }
 
     @PostMapping("persons")
-    public ResponseEntity<?> createPerson(@Valid @RequestBody PersonDTO person) {
+    public ResponseEntity<?> createPerson(@Valid @RequestBody PersonDTO person)  {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(personRepository.save(person));
